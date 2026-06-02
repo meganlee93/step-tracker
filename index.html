@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project Fit | Step & Food Tracker</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="styles.css">
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <!-- Ambient background glow elements -->
+  <div class="bg-glow bg-glow-1"></div>
+  <div class="bg-glow bg-glow-2"></div>
+  <div class="bg-glow bg-glow-3"></div>
+
+  <!-- Header Navigation -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="header-left-group">
+        <div class="logo-section">
+          <div class="logo-icon">
+            <i data-lucide="activity"></i>
+          </div>
+          <div class="logo-text">
+            <h1>Project Fit</h1>
+            <span class="tagline">Walk off your cravings</span>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="app-navigation">
+          <button id="tab-dashboard" class="nav-tab-btn active">
+            <i data-lucide="layout-dashboard"></i> Dashboard
+          </button>
+          <button id="tab-community" class="nav-tab-btn">
+            <i data-lucide="users"></i> Community Comparison
+          </button>
+        </nav>
+      </div>
+
+      <!-- Date Selector -->
+      <div class="date-selector-wrapper">
+        <button id="prev-day-btn" class="icon-btn-secondary" title="Previous Day">
+          <i data-lucide="chevron-left"></i>
+        </button>
+        <div class="date-display-container">
+          <i data-lucide="calendar"></i>
+          <input type="date" id="date-picker" class="date-input">
+          <span id="date-label">Today</span>
+        </div>
+        <button id="next-day-btn" class="icon-btn-secondary" title="Next Day">
+          <i data-lucide="chevron-right"></i>
+        </button>
+      </div>
+
+      <div class="header-controls">
+        <!-- Connection Status Badge -->
+        <div id="sync-status" class="sync-status-badge offline" title="Firebase Connection Status">
+          <span class="status-dot"></span>
+          <span id="sync-status-text">Local Mode</span>
+        </div>
+
+        <!-- Active User Selector -->
+        <div class="user-switcher-container">
+          <button id="user-menu-btn" class="user-menu-trigger">
+            <div class="user-avatar" id="current-user-avatar">
+              <span id="current-user-initials">U</span>
+            </div>
+            <div class="user-meta">
+              <span id="current-user-name">Select User</span>
+              <span class="user-role">Active Profile</span>
+            </div>
+            <i data-lucide="chevron-down" class="chevron-icon"></i>
+          </button>
+          <div id="user-dropdown" class="dropdown-menu">
+            <div class="dropdown-header">Switch Profile</div>
+            <div id="users-list-dropdown" class="dropdown-list">
+              <!-- Dynamically populated profiles -->
+            </div>
+            <div class="dropdown-divider"></div>
+            <button id="manage-users-menu-btn" class="dropdown-action-btn">
+              <i data-lucide="settings"></i> Manage Users
+            </button>
+            <button id="add-user-menu-btn" class="dropdown-action-btn">
+              <i data-lucide="user-plus"></i> Add New User
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="app-main">
+    <!-- View 1: Personal Dashboard -->
+    <div id="view-dashboard" class="tab-view">
+      <div class="dashboard-grid">
+      
+
+      <!-- CENTER COLUMN: Active Progress & Metrics -->
+      <section class="grid-col col-center">
+        <!-- Log Steps Card -->
+        <div class="dashboard-card glass-card log-steps-card">
+          <div class="card-header">
+            <div class="header-title-wrapper">
+              <i data-lucide="plus-circle" class="accent-emerald"></i>
+              <h2>Log Steps</h2>
+            </div>
+            <span class="card-subtitle">Add steps walked today</span>
+          </div>
+          <div class="card-body">
+            <form id="log-steps-form" class="app-form">
+              <div class="form-group-row">
+                <div class="input-with-icon">
+                  <i data-lucide="footprints"></i>
+                  <input type="number" id="step-count-input" placeholder="Enter steps (e.g. 2500)" min="1" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Add</button>
+              </div>
+            </form>
+
+            <div class="divider"></div>
+            <div class="workout-logging-section">
+              <h3>Extra Workouts</h3>
+              <span class="card-subtitle" style="margin-bottom: 12px; display: block;">Log sessions to earn bonus steps</span>
+              
+              <div class="workout-counter-row">
+                <button type="button" id="dec-workout-btn" class="icon-btn-secondary" title="Decrease workouts">
+                  <i data-lucide="minus"></i>
+                </button>
+                <div class="workout-count-display-wrapper">
+                  <span id="workout-count-display" class="workout-count-value">0</span>
+                  <span class="workout-count-label">workouts</span>
+                </div>
+                <button type="button" id="inc-workout-btn" class="icon-btn-secondary" title="Increase workouts">
+                  <i data-lucide="plus"></i>
+                </button>
+              </div>
+              
+              <div class="workout-bonus-alert">
+                <i data-lucide="award" class="accent-amber"></i>
+                <span class="bonus-steps-text">Weekly total: <strong id="workout-weekly-count">0</strong> workouts (+<strong id="workout-bonus-display-val">0</strong> bonus steps)</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Active User Overview Card -->
+        <div class="dashboard-card glass-card main-progress-card">
+          <div class="card-body progress-container">
+            <!-- Date Hero Display -->
+            <div id="date-hero-card" class="date-hero-card status-grey">
+              <h2 id="date-hero-title">Today</h2>
+              <div class="hero-steps-display">
+                <span id="net-steps-val" class="net-steps-value">0</span>
+                <span class="divider">/</span>
+                <span id="goal-steps-val" class="goal-steps-target">10,000</span>
+              </div>
+              <span class="hero-label">Net Steps</span>
+            </div>
+
+            <!-- Detailed Metrics Grid -->
+            <div class="metrics-grid">
+              <div class="metric-item glass-metric-item">
+                <div class="metric-header">
+                  <i data-lucide="utensils-crossedges" class="accent-coral"></i>
+                  <span>Food Penalty</span>
+                </div>
+                <span id="food-deduction-val" class="metric-value">0</span>
+                <span class="metric-desc">Steps subtracted</span>
+              </div>
+
+              <div class="metric-item glass-metric-item">
+                <div class="metric-header">
+                  <i data-lucide="dumbbell" class="accent-amber"></i>
+                  <span>Weekly Workout Bonus</span>
+                </div>
+                <span id="workout-bonus-val" class="metric-value">0</span>
+                <span class="metric-desc">From weekly sessions</span>
+              </div>
+
+              <div class="metric-item glass-metric-item highlight-bonus">
+                <div class="metric-header">
+                  <i data-lucide="star" class="accent-amber"></i>
+                  <span>Extra Steps</span>
+                </div>
+                <span id="extra-steps-val" class="metric-value">0</span>
+                <span id="extra-steps-desc" class="metric-desc">Over daily goal</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cumulative Goals Card -->
+        <div class="dashboard-card glass-card cumulative-card" style="margin-top: 20px;">
+          <div class="card-header">
+            <div class="header-title-wrapper">
+              <i data-lucide="trending-up" class="accent-cyan"></i>
+              <h2>Total Stats</h2>
+            </div>
+            <span class="card-subtitle">Performance relative to selected date</span>
+          </div>
+          <div class="card-body cumulative-body">
+            <div class="cumulative-stats-grid">
+              <div class="cumulative-stat-item glass-metric-item">
+                <div class="metric-header">
+                  <i data-lucide="calendar"></i>
+                  <span>Weekly Net Total</span>
+                </div>
+                <span id="weekly-total-val" class="metric-value">0</span>
+                <span class="metric-desc">Mon to Sun of active week</span>
+              </div>
+              
+              <div class="cumulative-stat-item glass-metric-item">
+                <div class="metric-header">
+                  <i data-lucide="calendar-days"></i>
+                  <span>Monthly Net Total</span>
+                </div>
+                <span id="monthly-total-val" class="metric-value">0</span>
+                <span class="metric-desc">1st to selected date</span>
+              </div>
+              
+              <div class="cumulative-stat-item glass-metric-item highlight-bonus">
+                <div class="metric-header">
+                  <i data-lucide="star" class="accent-amber"></i>
+                  <span>Total Extra Steps</span>
+                </div>
+                <span id="cumulative-extra-val" class="metric-value">0</span>
+                <span id="cumulative-extra-desc" class="metric-desc">Mon to Sun / Month to date</span>
+              </div>
+              
+              <div class="cumulative-stat-item glass-metric-item highlight-target">
+                <div class="metric-header">
+                  <i data-lucide="target"></i>
+                  <span>Target to Date</span>
+                </div>
+                <span id="monthly-target-val" class="metric-value">0</span>
+                <div class="diff-wrapper" style="margin-top: 4px;">
+                  <span id="monthly-diff-val" class="diff-badge">0</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT COLUMN: Actions & Logging -->
+      <section class="grid-col col-right">
+        <!-- Log Food Card -->
+        <div class="dashboard-card glass-card log-food-card">
+          <div class="card-header">
+            <div class="header-title-wrapper">
+              <i data-lucide="apple" class="accent-coral"></i>
+              <h2>Log Foods Eaten</h2>
+            </div>
+            <span class="card-subtitle">Deducts steps based on choice</span>
+          </div>
+          <div class="card-body">
+            <!-- Catalog Search & Filter -->
+            <div class="catalog-filters">
+              <div class="search-box">
+                <i data-lucide="search"></i>
+                <input type="text" id="food-search" placeholder="Search catalog (e.g. burger)...">
+              </div>
+              <div class="category-tabs">
+                <button class="tab-btn active" data-category="all">All</button>
+                <button class="tab-btn" data-category="meals">Meals</button>
+                <button class="tab-btn" data-category="snacks">Snacks</button>
+                <button class="tab-btn" data-category="drinks">Drinks</button>
+                <button class="tab-btn" data-category="healthy">Healthy</button>
+              </div>
+            </div>
+
+            <!-- Food Grid / Selection -->
+            <div id="food-catalog-grid" class="food-grid">
+              <!-- Dynamically populated food buttons -->
+            </div>
+
+            <!-- Custom Food Creator Toggle -->
+            <button id="toggle-custom-food-btn" class="btn-link">
+              <i data-lucide="plus"></i> Log a custom food item
+            </button>
+
+            <!-- Custom Food Form (hidden by default) -->
+            <form id="custom-food-form" class="custom-food-form hidden-element">
+              <h3>Custom Food Penalty</h3>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="custom-food-name">Food Name</label>
+                  <input type="text" id="custom-food-name" placeholder="e.g. Chocolate Chip Cookie" required>
+                </div>
+                <div class="form-group">
+                  <label for="custom-food-deduction">Step Cost</label>
+                  <input type="number" id="custom-food-deduction" placeholder="Steps (e.g. 2000)" min="0" required>
+                </div>
+              </div>
+              <div class="custom-form-actions">
+                <button type="button" id="cancel-custom-food" class="btn btn-secondary btn-sm">Cancel</button>
+                <button type="submit" class="btn btn-primary btn-sm">Log &amp; Save</button>
+              </div>
+            </form>
+
+            <div class="divider"></div>
+
+            <!-- Today's Logged Foods List -->
+            <div class="logged-foods-section">
+              <h3>Eaten Today</h3>
+              <ul id="logged-foods-list" class="logged-items-list">
+                <!-- Dynamically populated logged food items -->
+                <li class="empty-list-msg">No foods logged today yet.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      </div>
+    </div>
+
+    <!-- View 2: Community Comparison (Weekly Pivot Table) -->
+    <div id="view-community" class="tab-view hidden-element">
+      <div class="community-view-header">
+        <div class="community-header-main">
+          <h2>Community Comparison</h2>
+          <p class="community-view-subtitle">Weekly progress matrix: Monday to Sunday</p>
+        </div>
+        <!-- Week Navigator -->
+        <div class="week-selector-wrapper">
+          <button id="prev-week-btn" class="icon-btn-secondary" title="Previous Week">
+            <i data-lucide="chevron-left"></i>
+          </button>
+          <div class="week-display-container">
+            <i data-lucide="calendar-days"></i>
+            <span id="week-label">From Date to Date</span>
+          </div>
+          <button id="next-week-btn" class="icon-btn-secondary" title="Next Week">
+            <i data-lucide="chevron-right"></i>
+          </button>
+        </div>
+      </div>
+      
+      <div class="community-table-wrapper glass-card">
+        <table class="community-pivot-table">
+          <thead>
+            <tr id="community-table-head">
+              <!-- Dynamically populated column headers -->
+            </tr>
+          </thead>
+          <tbody id="community-table-body">
+            <!-- Monday to Sunday rows -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- MODAL: Create New User Profile -->
+  <div id="add-user-modal" class="modal-overlay">
+    <div class="modal-content glass-card">
+      <div class="modal-header">
+        <h2>Create User Profile</h2>
+        <button id="close-modal-btn" class="icon-btn-secondary">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="create-user-form" class="app-form">
+          <div class="form-group">
+            <label for="new-username">Profile Name</label>
+            <input type="text" id="new-username" placeholder="Enter name (e.g. Alice)" maxlength="15" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="new-user-goal">Daily Step Goal</label>
+            <div class="input-with-icon">
+              <i data-lucide="target"></i>
+              <input type="number" id="new-user-goal" value="8000" min="1000" step="500" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Profile Accent Color</label>
+            <div class="color-options-grid">
+              <label class="color-option-label">
+                <input type="radio" name="profile-color" value="#10b981" checked>
+                <span class="color-preview" style="background-color: #10b981;" title="Emerald"></span>
+              </label>
+              <label class="color-option-label">
+                <input type="radio" name="profile-color" value="#06b6d4">
+                <span class="color-preview" style="background-color: #06b6d4;" title="Cyan"></span>
+              </label>
+              <label class="color-option-label">
+                <input type="radio" name="profile-color" value="#6366f1">
+                <span class="color-preview" style="background-color: #6366f1;" title="Indigo"></span>
+              </label>
+              <label class="color-option-label">
+                <input type="radio" name="profile-color" value="#a855f7">
+                <span class="color-preview" style="background-color: #a855f7;" title="Purple"></span>
+              </label>
+              <label class="color-option-label">
+                <input type="radio" name="profile-color" value="#ec4899">
+                <span class="color-preview" style="background-color: #ec4899;" title="Pink"></span>
+              </label>
+              <label class="color-option-label">
+                <input type="radio" name="profile-color" value="#f59e0b">
+                <span class="color-preview" style="background-color: #f59e0b;" title="Amber"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" id="cancel-user-create" class="btn btn-secondary">Cancel</button>
+            <button type="submit" class="btn btn-primary">Create Profile</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Manage User Profiles -->
+  <div id="manage-users-modal" class="modal-overlay">
+    <div class="modal-content glass-card manage-modal-width">
+      <div class="modal-header">
+        <h2>Manage User Profiles</h2>
+        <button id="close-manage-modal-btn" class="icon-btn-secondary">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="manage-users-list" class="manage-users-list">
+          <!-- Dynamically populated list of users with inline edit forms -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+  <script src="app.js"></script>
+</body>
+</html>
