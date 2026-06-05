@@ -1,6 +1,6 @@
 {
   "name": "stride-and-bite",
-  "version": "1.0.0",
+  "version": "1.0.9",
   "description": "Step and food step-deduction tracker with multi-user profiles and community dashboard.",
   "scripts": {
     "dev": "vite --port 3000 --open"

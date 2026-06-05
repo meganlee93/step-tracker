@@ -82,12 +82,18 @@ const DOM = {
   monthlyTotalVal: document.getElementById('monthly-total-val'),
   monthlyTargetVal: document.getElementById('monthly-target-val'),
   monthlyDiffVal: document.getElementById('monthly-diff-val'),
+  monthlyBurpeesVal: document.getElementById('monthly-burpees-val'),
   decWorkoutBtn: document.getElementById('dec-workout-btn'),
   incWorkoutBtn: document.getElementById('inc-workout-btn'),
   workoutCountDisplay: document.getElementById('workout-count-display'),
   workoutWeeklyCount: document.getElementById('workout-weekly-count'),
   workoutBonusDisplayVal: document.getElementById('workout-bonus-display-val'),
   workoutBonusVal: document.getElementById('workout-bonus-val'),
+  logBurpeesForm: document.getElementById('log-burpees-form'),
+  burpeeAddInput: document.getElementById('burpee-add-input'),
+  resetBurpeesBtn: document.getElementById('reset-burpees-btn'),
+  burpeeTodayCount: document.getElementById('burpee-today-count'),
+  burpeeMonthlyCount: document.getElementById('burpee-monthly-count'),
   dateHeroCard: document.getElementById('date-hero-card'),
   dateHeroTitle: document.getElementById('date-hero-title'),
   netStepsVal: document.getElementById('net-steps-val'),
@@ -99,6 +105,8 @@ const DOM = {
   cumulativeExtraDesc: document.getElementById('cumulative-extra-desc'),
   logStepsForm: document.getElementById('log-steps-form'),
   stepCountInput: document.getElementById('step-count-input'),
+  resetStepsBtn: document.getElementById('reset-steps-btn'),
+  jumpTodayBtn: document.getElementById('jump-today-btn'),
   foodSearch: document.getElementById('food-search'),
   categoryTabs: document.querySelectorAll('.tab-btn'),
   foodCatalogGrid: document.getElementById('food-catalog-grid'),
@@ -175,6 +183,9 @@ function init() {
   if (migrated) {
     saveState();
   }
+
+  // Initialize mobile tab body class
+  document.body.classList.add('active-tab-progress');
 
   setupEventListeners();
   adjustDateSelectorPosition();
@@ -264,7 +275,8 @@ function startFirebaseListeners() {
       state.userLogs[userId][date] = {
         steps: data.steps || 0,
         foods: data.foods || [],
-        workouts: data.workouts || 0
+        workouts: data.workouts || 0,
+        burpees: data.burpees || 0
       };
     });
     
@@ -356,7 +368,13 @@ function saveState() {
 function getDailyLog(userId, dateStr) {
   if (!state.userLogs[userId]) state.userLogs[userId] = {};
   if (!state.userLogs[userId][dateStr]) {
-    state.userLogs[userId][dateStr] = { steps: 0, foods: [] };
+    state.userLogs[userId][dateStr] = { steps: 0, foods: [], workouts: 0, burpees: 0 };
+  }
+  if (state.userLogs[userId][dateStr].workouts === undefined) {
+    state.userLogs[userId][dateStr].workouts = 0;
+  }
+  if (state.userLogs[userId][dateStr].burpees === undefined) {
+    state.userLogs[userId][dateStr].burpees = 0;
   }
   return state.userLogs[userId][dateStr];
 }
@@ -420,10 +438,72 @@ function updateWorkoutsCount(newCount) {
   }
 }
 
+function addBurpees(count) {
+  const activeUser = getActiveUser();
+  if (!activeUser) return;
+
+  const log = getDailyLog(activeUser.id, state.selectedDate);
+  const newBurpees = (log.burpees || 0) + count;
+
+  if (isFirebaseConnected && db) {
+    db.collection('logs').doc(`${activeUser.id}_${state.selectedDate}`).set({
+      userId: activeUser.id,
+      date: state.selectedDate,
+      steps: log.steps,
+      foods: log.foods,
+      workouts: log.workouts || 0,
+      burpees: newBurpees
+    }, { merge: true }).catch(err => {
+      console.error("Firestore burpees log error: ", err);
+    });
+  } else {
+    log.burpees = newBurpees;
+    saveState();
+    renderAll();
+  }
+}
+
+function resetBurpees() {
+  const activeUser = getActiveUser();
+  if (!activeUser) return;
+
+  const confirmed = confirm("Are you sure you want to reset today's burpees back to 0?");
+  if (!confirmed) return;
+
+  const log = getDailyLog(activeUser.id, state.selectedDate);
+
+  if (isFirebaseConnected && db) {
+    db.collection('logs').doc(`${activeUser.id}_${state.selectedDate}`).set({
+      userId: activeUser.id,
+      date: state.selectedDate,
+      steps: log.steps,
+      foods: log.foods,
+      workouts: log.workouts || 0,
+      burpees: 0
+    }, { merge: true }).catch(err => {
+      console.error("Firestore reset burpees error: ", err);
+    });
+  } else {
+    log.burpees = 0;
+    saveState();
+    renderAll();
+  }
+}
+
 function updateDateLabel() {
   const selected = new Date(state.selectedDate + 'T00:00:00');
   const options = { month: 'short', day: 'numeric', year: 'numeric' };
   DOM.dateLabel.textContent = selected.toLocaleDateString('en-US', options);
+
+  // Toggle "Jump to Today" button visibility
+  if (DOM.jumpTodayBtn) {
+    const todayStr = formatDateString(new Date());
+    if (state.selectedDate !== todayStr) {
+      DOM.jumpTodayBtn.classList.remove('hidden-element');
+    } else {
+      DOM.jumpTodayBtn.classList.add('hidden-element');
+    }
+  }
 }
 
 // --- Mock Data Seeding ---
@@ -785,6 +865,27 @@ function renderMainOverview() {
   DOM.workoutWeeklyCount.textContent = weeklyWorkouts;
   DOM.workoutBonusDisplayVal.textContent = weeklyWorkoutBonus.toLocaleString();
 
+  // Update burpees logger display
+  if (DOM.burpeeTodayCount) {
+    DOM.burpeeTodayCount.textContent = log.burpees || 0;
+  }
+
+  // Calculate running monthly burpees total
+  const selectedYear = selectedDateObj.getFullYear();
+  const selectedMonth = selectedDateObj.getMonth();
+  const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+  let monthlyBurpeesCount = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const day = new Date(selectedYear, selectedMonth, d);
+    const dateStr = formatDateString(day);
+    const logEntry = state.userLogs[user.id]?.[dateStr] || { burpees: 0 };
+    monthlyBurpeesCount += logEntry.burpees || 0;
+  }
+
+  if (DOM.burpeeMonthlyCount) {
+    DOM.burpeeMonthlyCount.textContent = monthlyBurpeesCount.toLocaleString();
+  }
+
   // Update Date Title
   const options = { weekday: 'long', month: 'short', day: 'numeric' };
   DOM.dateHeroTitle.textContent = selectedDateObj.toLocaleDateString('en-US', options);
@@ -797,6 +898,16 @@ function renderMainOverview() {
     DOM.dateHeroCard.classList.add('status-red');
   } else {
     DOM.dateHeroCard.classList.add('status-grey');
+  }
+
+  // Update SVG Progress Ring
+  const circle = document.getElementById('progress-ring-circle');
+  if (circle) {
+    const percentage = Math.min(100, (netSteps / user.goal) * 100);
+    const offset = CIRCUMFERENCE - (percentage / 100) * CIRCUMFERENCE;
+    circle.style.strokeDashoffset = offset;
+    circle.style.stroke = user.avatarColor;
+    circle.style.filter = `drop-shadow(0 0 8px ${user.avatarColor}88)`;
   }
 
   // Update focus glow variables matching user color
@@ -881,6 +992,19 @@ function renderCumulativeStats() {
   DOM.cumulativeExtraVal.innerHTML = `+${weeklyExtraSteps.toLocaleString()} <span style="font-size: 12px; color: var(--text-muted); font-weight: 400;">wk</span>`;
   if (DOM.cumulativeExtraDesc) {
     DOM.cumulativeExtraDesc.textContent = `Monthly total: +${monthlyExtraSteps.toLocaleString()}`;
+  }
+
+  // Calculate running monthly burpees total
+  let monthlyBurpeesCount = 0;
+  const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+  for (let d = 1; d <= daysInMonth; d++) {
+    const day = new Date(selectedYear, selectedMonth, d);
+    const dateStr = formatDateString(day);
+    const logEntry = state.userLogs[user.id]?.[dateStr] || { burpees: 0 };
+    monthlyBurpeesCount += logEntry.burpees || 0;
+  }
+  if (DOM.monthlyBurpeesVal) {
+    DOM.monthlyBurpeesVal.textContent = monthlyBurpeesCount.toLocaleString();
   }
 
   // Diff Badge Styling
@@ -1426,27 +1550,53 @@ function renderLoggedFoods() {
 
 // --- DOM Layout Helper ---
 function adjustDateSelectorPosition() {
-  const dateSelector = document.querySelector('.date-selector-wrapper');
-  const logStepsCard = document.querySelector('.log-steps-card');
-  const headerContainer = document.querySelector('.header-container');
-  const headerControls = document.querySelector('.header-controls');
+  // Keep the date selector persistently in the header on both desktop and mobile
+}
 
-  if (!dateSelector) return;
-
-  if (window.innerWidth <= 820) {
-    if (logStepsCard && dateSelector.parentElement !== logStepsCard.parentElement) {
-      logStepsCard.parentNode.insertBefore(dateSelector, logStepsCard);
+function switchMobileTab(tabName) {
+  // Reset all body tab classes
+  document.body.classList.remove('active-tab-progress', 'active-tab-food', 'active-tab-people', 'active-tab-history');
+  document.body.classList.add('active-tab-' + tabName);
+  
+  // Sync bottom nav buttons UI
+  const buttons = document.querySelectorAll('.mobile-nav-btn');
+  buttons.forEach(btn => {
+    if (btn.getAttribute('data-tab') === tabName) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
     }
+  });
+  
+  // Handle underlying view switching
+  if (tabName === 'people') {
+    state.activeTab = 'community';
+    DOM.tabCommunity.classList.add('active');
+    DOM.tabDashboard.classList.remove('active');
+    DOM.viewCommunity.classList.remove('hidden-element');
+    DOM.viewDashboard.classList.add('hidden-element');
   } else {
-    if (headerContainer && headerControls && dateSelector.parentElement !== headerContainer) {
-      headerContainer.insertBefore(dateSelector, headerControls);
-    }
+    state.activeTab = 'dashboard';
+    DOM.tabDashboard.classList.add('active');
+    DOM.tabCommunity.classList.remove('active');
+    DOM.viewCommunity.classList.add('hidden-element');
+    DOM.viewDashboard.classList.remove('hidden-element');
   }
+  
+  renderAll();
 }
 
 // --- Event Listeners Setup ---
 function setupEventListeners() {
   window.addEventListener('resize', adjustDateSelectorPosition);
+
+  // Mobile Bottom Tab Navigation listeners
+  document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabName = btn.getAttribute('data-tab');
+      switchMobileTab(tabName);
+    });
+  });
 
   // Global Dropdown click tracker
   document.addEventListener('click', (e) => {
@@ -1546,6 +1696,11 @@ function setupEventListeners() {
     DOM.stepCountInput.value = '';
   });
 
+  // Reset Steps click handler
+  if (DOM.resetStepsBtn) {
+    DOM.resetStepsBtn.addEventListener('click', resetSteps);
+  }
+
   // Food Search
   DOM.foodSearch.addEventListener('input', () => {
     renderFoodCatalog();
@@ -1599,6 +1754,16 @@ function setupEventListeners() {
     renderAll();
   });
 
+  // Jump to Today
+  if (DOM.jumpTodayBtn) {
+    DOM.jumpTodayBtn.addEventListener('click', () => {
+      const today = new Date();
+      state.selectedDate = formatDateString(today);
+      DOM.datePicker.value = state.selectedDate;
+      renderAll();
+    });
+  }
+
   // Tab Navigation Switching
   DOM.tabDashboard.addEventListener('click', () => {
     state.activeTab = 'dashboard';
@@ -1643,6 +1808,23 @@ function setupEventListeners() {
     const workouts = log.workouts || 0;
     updateWorkoutsCount(workouts + 1);
   });
+
+  // Burpee Log Form Submission
+  if (DOM.logBurpeesForm) {
+    DOM.logBurpeesForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const count = parseInt(DOM.burpeeAddInput.value, 10);
+      if (isNaN(count) || count <= 0) return;
+
+      addBurpees(count);
+      DOM.burpeeAddInput.value = '';
+    });
+  }
+
+  // Reset Burpees click handler
+  if (DOM.resetBurpeesBtn) {
+    DOM.resetBurpeesBtn.addEventListener('click', resetBurpees);
+  }
 }
 
 function openAddUserModal() {
@@ -1686,6 +1868,38 @@ function addSteps(count) {
     saveState();
     renderAll();
     syncToGoogleSheets(count, log.steps, foodPenalty, workouts, netSteps);
+  }
+}
+
+function resetSteps() {
+  const activeUser = getActiveUser();
+  if (!activeUser) return;
+
+  const confirmed = confirm("Are you sure you want to reset today's steps back to 0?");
+  if (!confirmed) return;
+
+  const log = getDailyLog(activeUser.id, state.selectedDate);
+  const diff = -log.steps;
+  const foodPenalty = log.foods.reduce((sum, item) => sum + item.deduction, 0);
+  const workouts = log.workouts || 0;
+  const netSteps = 0; // Steps reset to 0, so netSteps is 0
+
+  if (isFirebaseConnected && db) {
+    db.collection('logs').doc(`${activeUser.id}_${state.selectedDate}`).set({
+      userId: activeUser.id,
+      date: state.selectedDate,
+      steps: 0,
+      foods: log.foods
+    }, { merge: true }).then(() => {
+      syncToGoogleSheets(diff, 0, foodPenalty, workouts, netSteps);
+    }).catch(err => {
+      console.error("Firestore reset steps error: ", err);
+    });
+  } else {
+    log.steps = 0;
+    saveState();
+    renderAll();
+    syncToGoogleSheets(diff, 0, foodPenalty, workouts, netSteps);
   }
 }
 

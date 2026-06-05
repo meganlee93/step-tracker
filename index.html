@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=1.0.9">
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -39,7 +39,7 @@
             <i data-lucide="layout-dashboard"></i> Dashboard
           </button>
           <button id="tab-community" class="nav-tab-btn">
-            <i data-lucide="users"></i> Community Comparison
+            <i data-lucide="users"></i> People
           </button>
         </nav>
       </div>
@@ -57,6 +57,7 @@
         <button id="next-day-btn" class="icon-btn-secondary" title="Next Day">
           <i data-lucide="chevron-right"></i>
         </button>
+        <button id="jump-today-btn" class="btn-today hidden-element" title="Jump to Today">Today</button>
       </div>
 
       <div class="header-controls">
@@ -101,9 +102,42 @@
     <!-- View 1: Personal Dashboard -->
     <div id="view-dashboard" class="tab-view">
       <div class="dashboard-grid">
-      
+        <!-- LEFT COLUMN: Leaderboard & History -->
+        <section class="grid-col col-left">
+          <!-- Leaderboard Card -->
+          <div class="dashboard-card glass-card leaderboard-card">
+            <div class="card-header">
+              <div class="header-title-wrapper">
+                <i data-lucide="trophy" class="accent-gold"></i>
+                <h2>Leaderboard</h2>
+              </div>
+              <span class="card-subtitle">Today's active rankings</span>
+            </div>
+            <div class="card-body">
+              <div id="leaderboard-items" class="leaderboard-list">
+                <!-- Dynamically populated leaderboard items -->
+              </div>
+            </div>
+          </div>
 
-      <!-- CENTER COLUMN: Active Progress & Metrics -->
+          <!-- Personal History Card -->
+          <div class="dashboard-card glass-card history-card">
+            <div class="card-header">
+              <div class="header-title-wrapper">
+                <i data-lucide="calendar" class="accent-cyan"></i>
+                <h2>7-Day History</h2>
+              </div>
+              <span class="card-subtitle">Daily goal consistency</span>
+            </div>
+            <div class="card-body">
+              <div id="history-items" class="history-list">
+                <!-- Dynamically populated history rows -->
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- CENTER COLUMN: Active Progress & Metrics -->
       <section class="grid-col col-center">
         <!-- Log Steps Card -->
         <div class="dashboard-card glass-card log-steps-card">
@@ -122,6 +156,11 @@
                   <input type="number" id="step-count-input" placeholder="Enter steps (e.g. 2500)" min="1" required>
                 </div>
                 <button type="submit" class="btn btn-primary">Add</button>
+              </div>
+              <div class="form-actions-row" style="display: flex; justify-content: flex-start; margin-top: 4px;">
+                <button type="button" id="reset-steps-btn" class="btn-link" style="color: var(--accent-coral); font-size: 12px; display: inline-flex; align-items: center; gap: 4px;">
+                  <i data-lucide="rotate-ccw" style="width: 13px; height: 13px;"></i> Reset today's steps to 0
+                </button>
               </div>
             </form>
 
@@ -149,6 +188,35 @@
               </div>
             </div>
 
+            <div class="divider"></div>
+            <div class="burpee-logging-section">
+              <h3>Burpees</h3>
+              <span class="card-subtitle" style="margin-bottom: 12px; display: block;">Log burpees done today</span>
+              
+              <form id="log-burpees-form" class="app-form" style="margin-bottom: 12px;">
+                <div class="form-group-row">
+                  <div class="input-with-icon">
+                    <i data-lucide="flame" style="color: var(--accent-purple);"></i>
+                    <input type="number" id="burpee-add-input" placeholder="Enter burpees (e.g. 15)" min="1" required>
+                  </div>
+                  <button type="submit" class="btn btn-primary" style="background: linear-gradient(135deg, var(--accent-purple), #a855f7); box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3); border: none;">Add</button>
+                </div>
+                <div class="form-actions-row" style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                  <button type="button" id="reset-burpees-btn" class="btn-link" style="color: var(--accent-coral); font-size: 12px; display: inline-flex; align-items: center; gap: 4px;">
+                    <i data-lucide="rotate-ccw" style="width: 13px; height: 13px;"></i> Reset today's burpees to 0
+                  </button>
+                  <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">
+                    Today: <strong id="burpee-today-count" style="color: var(--accent-purple);">0</strong>
+                  </span>
+                </div>
+              </form>
+              
+              <div class="workout-bonus-alert" style="background: rgba(139, 92, 246, 0.08); border-color: rgba(139, 92, 246, 0.2); margin-top: 8px;">
+                <i data-lucide="flame" class="accent-purple" style="color: var(--accent-purple);"></i>
+                <span class="bonus-steps-text" style="color: var(--text-primary);">Monthly total: <strong id="burpee-monthly-count" style="color: var(--accent-purple);">0</strong> burpees</span>
+              </div>
+            </div>
+
           </div>
         </div>
 
@@ -157,13 +225,19 @@
           <div class="card-body progress-container">
             <!-- Date Hero Display -->
             <div id="date-hero-card" class="date-hero-card status-grey">
-              <h2 id="date-hero-title">Today</h2>
-              <div class="hero-steps-display">
-                <span id="net-steps-val" class="net-steps-value">0</span>
-                <span class="divider">/</span>
-                <span id="goal-steps-val" class="goal-steps-target">10,000</span>
+              <svg class="progress-ring" width="260" height="260">
+                <circle class="progress-ring-track" stroke="rgba(255, 255, 255, 0.02)" stroke-width="12" fill="transparent" r="120" cx="130" cy="130"/>
+                <circle id="progress-ring-circle" class="progress-ring-circle" stroke-width="12" fill="transparent" r="120" cx="130" cy="130" stroke-dasharray="753.98" stroke-dashoffset="753.98"/>
+              </svg>
+              <div class="date-hero-content">
+                <h2 id="date-hero-title">Today</h2>
+                <div class="hero-steps-display">
+                  <span id="net-steps-val" class="net-steps-value">0</span>
+                  <span class="divider">/</span>
+                  <span id="goal-steps-val" class="goal-steps-target">10,000</span>
+                </div>
+                <span class="hero-label">Net Steps</span>
               </div>
-              <span class="hero-label">Net Steps</span>
             </div>
 
             <!-- Detailed Metrics Grid -->
@@ -246,6 +320,15 @@
                   <span id="monthly-diff-val" class="diff-badge">0</span>
                 </div>
               </div>
+
+              <div class="cumulative-stat-item glass-metric-item highlight-purple">
+                <div class="metric-header">
+                  <i data-lucide="flame" class="accent-purple"></i>
+                  <span>Monthly Burpees</span>
+                </div>
+                <span id="monthly-burpees-val" class="metric-value">0</span>
+                <span class="metric-desc">Total for selected month</span>
+              </div>
             </div>
           </div>
         </div>
@@ -324,11 +407,11 @@
       </div>
     </div>
 
-    <!-- View 2: Community Comparison (Weekly Pivot Table) -->
+    <!-- View 2: People (Weekly Pivot Table) -->
     <div id="view-community" class="tab-view hidden-element">
       <div class="community-view-header">
         <div class="community-header-main">
-          <h2>Community Comparison</h2>
+          <h2>People</h2>
           <p class="community-view-subtitle">Weekly progress matrix: Monday to Sunday</p>
         </div>
         <!-- Week Navigator -->
@@ -441,12 +524,30 @@
     </div>
   </div>
 
-
+  <!-- Mobile Bottom Navigation -->
+  <nav class="mobile-bottom-nav">
+    <button id="mobile-nav-progress" class="mobile-nav-btn active" data-tab="progress">
+      <i data-lucide="activity"></i>
+      <span>Progress</span>
+    </button>
+    <button id="mobile-nav-food" class="mobile-nav-btn" data-tab="food">
+      <i data-lucide="apple"></i>
+      <span>Food</span>
+    </button>
+    <button id="mobile-nav-people" class="mobile-nav-btn" data-tab="people">
+      <i data-lucide="users"></i>
+      <span>People</span>
+    </button>
+    <button id="mobile-nav-history" class="mobile-nav-btn" data-tab="history">
+      <i data-lucide="calendar"></i>
+      <span>History</span>
+    </button>
+  </nav>
 
   <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=1.0.9"></script>
 </body>
 </html>
