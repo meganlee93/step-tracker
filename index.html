@@ -91,6 +91,9 @@
             <button id="add-user-menu-btn" class="dropdown-action-btn">
               <i data-lucide="user-plus"></i> Add New User
             </button>
+            <button id="sheet-settings-menu-btn" class="dropdown-action-btn">
+              <i data-lucide="file-spreadsheet"></i> Google Sheet Sync
+            </button>
           </div>
         </div>
       </div>
@@ -520,6 +523,51 @@
         <div id="manage-users-list" class="manage-users-list">
           <!-- Dynamically populated list of users with inline edit forms -->
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Google Sheet Settings -->
+  <div id="sheet-settings-modal" class="modal-overlay">
+    <div class="modal-content glass-card">
+      <div class="modal-header">
+        <h2>Google Sheet Food Settings</h2>
+        <button id="close-sheet-modal-btn" class="icon-btn-secondary">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="sheet-settings-form" class="app-form">
+          <p class="modal-info-text" style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">
+            Sync step penalties from a public Google Sheet instead of the default catalog.
+          </p>
+          
+          <div class="form-group">
+            <label for="sheet-url-input">Google Sheet Link or CSV URL</label>
+            <input type="text" id="sheet-url-input" placeholder="https://docs.google.com/spreadsheets/d/.../edit?usp=sharing" style="font-size: 13px;">
+          </div>
+          
+          <div class="sheet-status-message" id="sheet-status-msg" style="display: none; padding: 10px; border-radius: var(--border-radius-sm); font-size: 12px; margin-top: 10px;">
+            <!-- Dynamic status messages -->
+          </div>
+
+          <div style="margin-top: 14px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--card-border); padding: 12px; border-radius: var(--border-radius-sm);">
+            <h4 style="font-size: 12px; color: var(--text-primary); margin-bottom: 6px;">How to set up:</h4>
+            <ol style="font-size: 11px; color: var(--text-secondary); padding-left: 16px; display: flex; flex-direction: column; gap: 4px;">
+              <li>Open your Google Sheet containing food step penalties.</li>
+              <li>Ensure it has columns for: <strong>Food Name</strong>, <strong>Step Penalty</strong>, and optionally <strong>Category</strong>.</li>
+              <li>Click <strong>File > Share > Publish to web</strong>.</li>
+              <li>Select the sheet tab containing your data, change the format to <strong>Comma-separated values (.csv)</strong>, and click <strong>Publish</strong>.</li>
+              <li>Copy that link (or copy the standard sheet sharing link set to "Anyone with the link can view") and paste it here.</li>
+            </ol>
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" id="reset-sheet-btn" class="btn btn-secondary border-coral" style="color: var(--accent-coral); margin-right: auto;">Reset to Default</button>
+            <button type="button" id="cancel-sheet-settings" class="btn btn-secondary">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save &amp; Sync</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>

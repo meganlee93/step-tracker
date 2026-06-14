@@ -2234,3 +2234,36 @@ className = 'edit-actions'
     display: flex;
   }
 }
+
+/* --- Google Sheets Settings Modal Styles --- */
+.border-coral {
+  border-color: rgba(244, 63, 94, 0.4) !important;
+}
+.border-coral:hover {
+  border-color: var(--accent-coral) !important;
+  background: rgba(244, 63, 94, 0.05) !important;
+}
+
+.sheet-status-message {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: var(--border-radius-sm);
+  font-size: 12px;
+  line-height: 1.4;
+  animation: slide-down var(--transition-normal);
+}
+.sheet-status-message.success {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--accent-emerald);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+.sheet-status-message.error {
+  background: rgba(244, 63, 94, 0.1);
+  color: var(--accent-coral);
+  border: 1px solid rgba(244, 63, 94, 0.2);
+}
+.sheet-status-message.loading {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  border: 1px solid var(--card-border);
+}

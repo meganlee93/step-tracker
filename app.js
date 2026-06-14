@@ -18,12 +18,16 @@ const firebaseConfig = {
 // Paste your deployed Google Apps Script Web App URL here to enable automatic Sheets logging.
 const GOOGLE_SHEETS_WEBAPP_URL = "";
 
+// --- Google Sheet Food Catalog URL ---
+// Paste your Google Sheet URL here to load it as the default food catalog for all users.
+const DEFAULT_GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1soKJ3_8WFm2jayKNF45psN4CU1otmUwrX66UG7QeRj0/edit?usp=sharing";
+
 // --- Firebase Connection State ---
 let isFirebaseConnected = false;
 let db = null;
 
 // --- Food Catalog Database ---
-const FOOD_CATALOG = [
+const DEFAULT_FOOD_CATALOG = [
   // Meals
   { id: 'f-cheeseburger', name: 'Cheeseburger', deduction: 5000, category: 'meals' },
   { id: 'f-pizza', name: 'Pizza (Slice)', deduction: 4000, category: 'meals' },
@@ -48,6 +52,8 @@ const FOOD_CATALOG = [
   { id: 'f-chicken', name: 'Grilled Chicken Breast', deduction: 0, category: 'healthy' },
   { id: 'f-banana', name: 'Banana', deduction: 0, category: 'healthy' }
 ];
+
+let FOOD_CATALOG = [...DEFAULT_FOOD_CATALOG];
 
 // --- App State ---
 let state = {
@@ -130,14 +136,274 @@ const DOM = {
   communityTableBody: document.getElementById('community-table-body'),
   weekLabel: document.getElementById('week-label'),
   prevWeekBtn: document.getElementById('prev-week-btn'),
-  nextWeekBtn: document.getElementById('next-week-btn')
+  nextWeekBtn: document.getElementById('next-week-btn'),
+  sheetSettingsMenuBtn: document.getElementById('sheet-settings-menu-btn'),
+  sheetSettingsModal: document.getElementById('sheet-settings-modal'),
+  closeSheetModalBtn: document.getElementById('close-sheet-modal-btn'),
+  cancelSheetSettings: document.getElementById('cancel-sheet-settings'),
+  sheetSettingsForm: document.getElementById('sheet-settings-form'),
+  sheetUrlInput: document.getElementById('sheet-url-input'),
+  sheetStatusMsg: document.getElementById('sheet-status-msg'),
+  resetSheetBtn: document.getElementById('reset-sheet-btn')
 };
 
 // SVG Progress Ring Configuration
 const CIRCUMFERENCE = 2 * Math.PI * 120; // Radius = 120
 
+// --- Google Sheets Food Sync Functions ---
+
+// Convert standard sharing links or published HTML links to export CSV links
+function getGoogleSheetsCsvUrl(url) {
+  if (!url || url.trim() === "") return "";
+  url = url.trim();
+
+  // If it's already a direct published CSV URL or similar, use it directly
+  if (url.includes("pub?output=csv") || url.includes("export?format=csv")) {
+    return url;
+  }
+
+  // Regex to match standard Google Sheets URLs: https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/...
+  const sheetIdMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (sheetIdMatch && sheetIdMatch[1]) {
+    const sheetId = sheetIdMatch[1];
+    
+    // Check if there is a specific sheet tab gid defined: e.g. gid=123456
+    const gidMatch = url.match(/[#&?]gid=([0-9]+)/);
+    const gidParam = gidMatch ? `&gid=${gidMatch[1]}` : "";
+    
+    return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv${gidParam}`;
+  }
+
+  // Fallback to original URL
+  return url;
+}
+
+// Parse CSV text into food catalog structure
+function parseFoodCatalogCsv(csvText) {
+  // Quote-aware CSV row splitter (ignores newlines that are inside quoted cells)
+  const lines = [];
+  let currentRow = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < csvText.length; i++) {
+    const char = csvText[i];
+    const nextChar = csvText[i + 1];
+    
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      currentRow += char;
+    } else if ((char === '\r' && nextChar === '\n') || char === '\n') {
+      if (inQuotes) {
+        currentRow += char;
+      } else {
+        lines.push(currentRow);
+        currentRow = '';
+        if (char === '\r') i++; // Skip the \n character
+      }
+    } else {
+      currentRow += char;
+    }
+  }
+  if (currentRow.trim() !== '') {
+    lines.push(currentRow);
+  }
+
+  // Parse lines into columns, keeping quote contents grouped
+  const parsedLines = lines.map(line => {
+    const result = [];
+    let current = '';
+    let inColQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        inColQuotes = !inColQuotes;
+      } else if (char === ',' && !inColQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  }).filter(cols => cols.length > 0 && cols.some(c => c !== ""));
+
+  if (parsedLines.length === 0) return [];
+
+  // Helper to check if a column looks like a step penalty number (digits, commas, minus, empty, or containing "steps")
+  function isNumericColumn(str) {
+    if (!str || str.trim() === "") return true; // Empty cells treated as 0 penalty
+    const clean = str.toLowerCase().replace(/steps/g, '').replace(/,/g, '').trim();
+    return /^-?\d+$/.test(clean);
+  }
+
+  // Helper to parse clean integer penalty from cell string
+  function parseNumericValue(str) {
+    if (!str || str.trim() === "") return 0;
+    const clean = str.toLowerCase().replace(/steps/g, '').replace(/,/g, '').trim();
+    const parsed = parseInt(clean, 10);
+    return isNaN(parsed) ? 0 : Math.abs(parsed);
+  }
+
+  let startIndex = 0;
+  // Detect header row if the first column has non-number or header keywords
+  const firstRow = parsedLines[0];
+  const isHeader = (firstRow[0] && isNaN(Number(firstRow[0].replace(/,/g, '').trim())) && firstRow[1] && isNaN(Number(firstRow[1].replace(/,/g, '').trim()))) ||
+                   (firstRow[0] && (firstRow[0].toLowerCase().includes('food') || firstRow[0].toLowerCase().includes('name') || firstRow[0].toLowerCase().includes('step') || firstRow[0].toLowerCase().includes('penalty'))) ||
+                   (firstRow[1] && (firstRow[1].toLowerCase().includes('food') || firstRow[1].toLowerCase().includes('name') || firstRow[1].toLowerCase().includes('step') || firstRow[1].toLowerCase().includes('penalty')));
+  
+  if (isHeader) {
+    startIndex = 1;
+  }
+
+  const catalog = [];
+  for (let i = startIndex; i < parsedLines.length; i++) {
+    const cols = parsedLines[i];
+    if (cols.length === 0) continue;
+
+    let rawName = '';
+    let penalty = 0;
+    let categoryInput = '';
+
+    const col0Val = cols[0] ? cols[0].replace(/^"|"$/g, '').trim() : '';
+    const col1Val = cols[1] ? cols[1].replace(/^"|"$/g, '').trim() : '';
+
+    const col0IsNum = isNumericColumn(col0Val);
+    const col1IsNum = isNumericColumn(col1Val);
+
+    if (col0IsNum && !col1IsNum) {
+      // Column A is Steps, Column B is Foods
+      penalty = parseNumericValue(col0Val);
+      rawName = col1Val;
+      if (cols.length >= 3) categoryInput = cols[2];
+    } else {
+      // Column A is Foods, Column B is Steps (default layout) or both are numbers
+      rawName = col0Val;
+      penalty = parseNumericValue(col1Val);
+      if (cols.length >= 3) categoryInput = cols[2];
+    }
+
+    if (rawName === "") continue;
+
+    // Optional category matching
+    let category = 'meals';
+    if (categoryInput) {
+      const catInput = categoryInput.replace(/^"|"$/g, '').trim().toLowerCase();
+      if (['meals', 'snacks', 'drinks', 'healthy'].includes(catInput)) {
+        category = catInput;
+      } else if (catInput.includes('meal')) {
+        category = 'meals';
+      } else if (catInput.includes('snack')) {
+        category = 'snacks';
+      } else if (catInput.includes('drink') || catInput.includes('beverage') || catInput.includes('soda') || catInput.includes('alcohol')) {
+        category = 'drinks';
+      } else if (catInput.includes('health') || catInput.includes('fit') || catInput.includes('fruit') || catInput.includes('veg')) {
+        category = 'healthy';
+      }
+    }
+
+    // Split multiple food names if separated by commas or newlines (line breaks)
+    const foodNames = rawName.split(/,|\n|\r/).map(item => item.trim()).filter(item => item !== "");
+    foodNames.forEach((foodName, idx) => {
+      catalog.push({
+        id: `f-gs-${i}-${idx}-${Math.floor(Math.random() * 100)}`,
+        name: foodName,
+        deduction: penalty,
+        category: category
+      });
+    });
+  }
+  return catalog;
+}
+
+// Load food catalog from localStorage cache
+function loadFoodCatalogFromCache() {
+  try {
+    const cachedUrl = localStorage.getItem('googleSheetFoodUrl');
+    const cachedData = localStorage.getItem('cachedFoodCatalog');
+    if (cachedUrl && cachedData) {
+      const parsed = JSON.parse(cachedData);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        FOOD_CATALOG = parsed;
+        console.log(`Loaded ${parsed.length} foods from local Google Sheet cache.`);
+        return true;
+      }
+    }
+  } catch (e) {
+    console.error("Failed to load cached food catalog:", e);
+  }
+  return false;
+}
+
+// Fetch food catalog from Google Sheet URL
+async function fetchFoodCatalogFromSheet(url) {
+  const csvUrl = getGoogleSheetsCsvUrl(url);
+  if (!csvUrl) throw new Error("Invalid URL format.");
+
+  const response = await fetch(csvUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch spreadsheet. Status: ${response.status}`);
+  }
+  
+  const text = await response.text();
+  
+  // Check if the response is actually an HTML page (e.g. Google Login redirection)
+  if (text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
+    throw new Error("The spreadsheet is private. Please share it as 'Anyone with the link can view' or use 'Publish to the Web'.");
+  }
+
+  const parsed = parseFoodCatalogCsv(text);
+  if (parsed.length === 0) {
+    throw new Error("No valid food items found in the spreadsheet.");
+  }
+  
+  return parsed;
+}
+
 // --- Initialize App ---
 function init() {
+  // Load Google Sheets food catalog from cache if available
+  const hasCache = loadFoodCatalogFromCache();
+  
+  // Use default Google Sheet URL if none is saved in localStorage
+  let savedUrl = localStorage.getItem('googleSheetFoodUrl');
+  if (!savedUrl && typeof DEFAULT_GOOGLE_SHEET_URL !== 'undefined' && DEFAULT_GOOGLE_SHEET_URL.trim() !== '') {
+    savedUrl = DEFAULT_GOOGLE_SHEET_URL;
+  }
+  
+  if (savedUrl) {
+    // If it's the default URL and no cache exists, fetch immediately
+    if (!hasCache && savedUrl === DEFAULT_GOOGLE_SHEET_URL) {
+      fetchFoodCatalogFromSheet(savedUrl)
+        .then(newCatalog => {
+          FOOD_CATALOG = newCatalog;
+          localStorage.setItem('googleSheetFoodUrl', savedUrl);
+          localStorage.setItem('cachedFoodCatalog', JSON.stringify(newCatalog));
+          if (state.activeTab === 'dashboard') {
+            renderFoodCatalog();
+            lucide.createIcons();
+          }
+        })
+        .catch(err => {
+          console.warn("Initial food catalog fetch failed:", err);
+        });
+    } else {
+      // Normal background sync
+      fetchFoodCatalogFromSheet(savedUrl)
+        .then(newCatalog => {
+          FOOD_CATALOG = newCatalog;
+          localStorage.setItem('cachedFoodCatalog', JSON.stringify(newCatalog));
+          if (state.activeTab === 'dashboard') {
+            renderFoodCatalog();
+            lucide.createIcons();
+          }
+        })
+        .catch(err => {
+          console.warn("Background food catalog sync failed (using cache):", err);
+        });
+    }
+  }
+
   setDefaultDate();
   state.communityWeekStart = getMondayOfDate(new Date());
   
@@ -1631,6 +1897,13 @@ function setupEventListeners() {
     openManageUsersModal();
   });
 
+  // Open sheet settings modal
+  DOM.sheetSettingsMenuBtn.addEventListener('click', () => {
+    DOM.userDropdown.classList.remove('show');
+    DOM.userMenuBtn.parentElement.classList.remove('active');
+    openSheetSettingsModal();
+  });
+
   // Close modals
   DOM.closeModalBtn.addEventListener('click', closeAddUserModal);
   DOM.cancelUserCreate.addEventListener('click', closeAddUserModal);
@@ -1641,6 +1914,75 @@ function setupEventListeners() {
   DOM.closeManageModalBtn.addEventListener('click', closeManageUsersModal);
   DOM.manageUsersModal.addEventListener('click', (e) => {
     if (e.target === DOM.manageUsersModal) closeManageUsersModal();
+  });
+
+  // Close Google Sheet settings modal
+  DOM.closeSheetModalBtn.addEventListener('click', closeSheetSettingsModal);
+  DOM.cancelSheetSettings.addEventListener('click', closeSheetSettingsModal);
+  DOM.sheetSettingsModal.addEventListener('click', (e) => {
+    if (e.target === DOM.sheetSettingsModal) closeSheetSettingsModal();
+  });
+
+  // Google Sheet settings form submission
+  DOM.sheetSettingsForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const url = DOM.sheetUrlInput.value.trim();
+    
+    // Reset status message
+    DOM.sheetStatusMsg.style.display = 'block';
+    DOM.sheetStatusMsg.className = 'sheet-status-message loading';
+    DOM.sheetStatusMsg.textContent = 'Validating and syncing Google Sheet...';
+    
+    try {
+      if (!url) {
+        throw new Error("Please enter a Google Sheet URL.");
+      }
+      
+      const newCatalog = await fetchFoodCatalogFromSheet(url);
+      
+      // Success! Update catalog, cache, and save URL
+      FOOD_CATALOG = newCatalog;
+      localStorage.setItem('googleSheetFoodUrl', url);
+      localStorage.setItem('cachedFoodCatalog', JSON.stringify(newCatalog));
+      
+      DOM.sheetStatusMsg.className = 'sheet-status-message success';
+      DOM.sheetStatusMsg.textContent = `Successfully synced ${newCatalog.length} food items!`;
+      
+      // Rerender and close modal
+      renderFoodCatalog();
+      lucide.createIcons();
+      
+      setTimeout(() => {
+        closeSheetSettingsModal();
+      }, 1500);
+      
+    } catch (err) {
+      console.error(err);
+      DOM.sheetStatusMsg.className = 'sheet-status-message error';
+      DOM.sheetStatusMsg.textContent = `Sync failed: ${err.message}`;
+    }
+  });
+
+  // Reset sheet settings to default catalog
+  DOM.resetSheetBtn.addEventListener('click', () => {
+    const confirmed = confirm("Are you sure you want to clear your Google Sheet settings and revert to the default food catalog?");
+    if (!confirmed) return;
+    
+    localStorage.removeItem('googleSheetFoodUrl');
+    localStorage.removeItem('cachedFoodCatalog');
+    FOOD_CATALOG = [...DEFAULT_FOOD_CATALOG];
+    DOM.sheetUrlInput.value = '';
+    
+    DOM.sheetStatusMsg.style.display = 'block';
+    DOM.sheetStatusMsg.className = 'sheet-status-message success';
+    DOM.sheetStatusMsg.textContent = 'Reverted to default food catalog successfully.';
+    
+    renderFoodCatalog();
+    lucide.createIcons();
+    
+    setTimeout(() => {
+      closeSheetSettingsModal();
+    }, 1500);
   });
 
 
@@ -1833,6 +2175,18 @@ function openAddUserModal() {
 
 function closeAddUserModal() {
   DOM.addUserModal.classList.remove('show');
+}
+
+function openSheetSettingsModal() {
+  const savedUrl = localStorage.getItem('googleSheetFoodUrl') || '';
+  DOM.sheetUrlInput.value = savedUrl;
+  DOM.sheetStatusMsg.style.display = 'none';
+  DOM.sheetSettingsModal.classList.add('show');
+  lucide.createIcons();
+}
+
+function closeSheetSettingsModal() {
+  DOM.sheetSettingsModal.classList.remove('show');
 }
 
 function hideCustomFoodForm() {
